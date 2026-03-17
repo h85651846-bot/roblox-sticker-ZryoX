@@ -1,7 +1,16 @@
+const { Client, GatewayIntentBits } = require('discord.js'); // IMPORTANTE ITO
 const express = require('express');
 const multer = require('multer');
 const upload = multer();
 const app = express();
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
+});
 
 app.post('/send-sticker', upload.single('file'), async (req, res) => {
     if (req.headers['auth-key'] !== process.env.AUTH_KEY) {
@@ -28,11 +37,12 @@ app.post('/send-sticker', upload.single('file'), async (req, res) => {
         const result = await response.json();
         if (!response.ok) throw new Error(JSON.stringify(result));
 
-        res.status(200).send("Success! Embed V2 Sent.");
+        res.status(200).send("Success!");
     } catch (err) {
         console.error(err);
         res.status(500).send(err.message);
     }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log('Bot API is Live!'));
+client.login(process.env.BOT_TOKEN);
+app.listen(process.env.PORT || 3000, () => console.log('Bot is Online!'));
