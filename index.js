@@ -3,21 +3,33 @@ const multer = require('multer');
 const upload = multer();
 const app = express();
 
+app.use(express.json());
+
 app.post('/send-sticker', upload.single('file'), async (req, res) => {
-    if (req.headers['auth-key'] !== process.env.AUTH_KEY) {
-        return res.status(401).send("Unauthorized");
+    const authKey = req.headers['auth-key'];
+    if (authKey !== process.env.AUTH_KEY) {
+        return res.status(401).json({ 
+            success: false, 
+            error: "Unauthorized" 
+        });
     }
 
     try {
         const formData = new FormData();
-        formData.append('payload_json', req.body.payload_json);
+        
+        if (req.body.payload_json) {
+            formData.append('payload_json', req.body.payload_json);
+        } else {
+            return res.status(400).json({ success: false, error: "Missing payload" });
+        }
         
         if (req.file) {
-            const blob = new Blob([req.file.buffer], { type: 'text/plain' });
-            formData.append('file', blob, req.file.originalname);
+            const blob = new Blob([req.file.buffer], { type: req.file.mimetype || 'text/plain' });
+            formData.append('file', blob, req.file.originalname || 'sticker.txt');
         }
 
-        const response = await fetch(`https://discord.com/api/v10/channels/${process.env.CHANNEL_ID}/messages`, {
+        const discordUrl = `https://discord.com/api/v10/channels/${process.env.CHANNEL_ID}/messages`;
+        const discordResponse = await fetch(discordUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `Bot ${process.env.BOT_TOKEN}`
@@ -25,18 +37,38 @@ app.post('/send-sticker', upload.single('file'), async (req, res) => {
             body: formData
         });
 
-        const result = await response.json();
+        const contentType = discordResponse.headers.get("content-type");
+        let result;
         
-        if (!response.ok) {
-            console.error("Discord API Error:", result);
-            return res.status(response.status).send(result);
+        if (contentType && contentType.includes("application/json")) {
+            result = await discordResponse.json();
+        } else {
+            result = await discordResponse.text();
+        }
+        
+        if (!discordResponse.ok) {
+            return res.status(discordResponse.status).json({ 
+                success: false, 
+                detail: result 
+            });
         }
 
-        res.status(200).send("Success! Sticker sent to Discord.");
+        return res.status(200).json({ 
+            success: true, 
+            message: "Sent" 
+        });
+
     } catch (err) {
-        console.error("Server Error:", err);
-        res.status(500).send(err.message);
+        return res.status(500).json({ 
+            success: false, 
+            error: err.message 
+        });
     }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log('Bot API is Live!'));
+app.get('/', (req, res) => {
+    res.send("Online");
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Live on ${PORT}`));
